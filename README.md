@@ -52,3 +52,24 @@ Here's a list of sessions I made (in Arabic) for Alexandria University, explaini
 Below is a student's guide on utilizing Git.
 
 1. [ArmaGit](https://github.com/Armaritto/ArmaGit)
+
+## 🧪 Priority Scheduler Test Results
+
+### Functionality of Priority Scheduler (`tests/threads/Rubric.priority`)
+
+| Test Name                            | Points | Result |
+|-------------------------------------|--------|--------|
+| `priority-change`                   | 3      | ❌ 0/3 |
+| `priority-preempt`                  | 3      | ❌ 0/3 |
+| `priority-fifo`                     | 3      | ❌ 0/3 |
+| `priority-sema`                     | 3      | ❌ 0/3 |
+| `priority-condvar`                  | 3      | ❌ 0/3 |
+| `priority-donate-one`              | 3      | ❌ 0/3 |
+| `priority-donate-multiple`         | 3      | ❌ 0/3 |
+| `priority-donate-multiple2`        | 3      | ❌ 0/3 |
+| `priority-donate-nest`             | 3      | ❌ 0/3 |
+| `priority-donate-chain`            | 5      | ❌ 0/5 |
+| `priority-donate-sema`             | 3      | ❌ 0/3 |
+| `priority-donate-lower`            | 3      | ❌ 0/3 |
+
+---
