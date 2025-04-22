@@ -462,6 +462,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->effectivePriority = priority;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -540,6 +541,16 @@ thread_schedule_tail (struct thread *prev)
       ASSERT (prev != cur);
       palloc_free_page (prev);
     }
+}
+
+int thread_get_effective_priority (void){
+  return thread_current()->effectivePriority;
+}
+void thread_set_effective_priority (int new_effective_priority,
+                                    struct thread *t){
+  ASSERT (is_thread (t));
+  thread_current()->effectivePriority = new_effective_priority;
+
 }
 
 /* Schedules a new process.  At entry, interrupts must be off and
