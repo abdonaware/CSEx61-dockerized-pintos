@@ -71,6 +71,7 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 bool choose_higher_priority_thread(const struct list_elem *elem1, const struct list_elem *elem2, void *aux UNUSED);
+void thread_test_preemption (void);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -136,6 +137,14 @@ thread_tick (void)
     kernel_ticks++;
 
   /* Enforce preemption. */
+  if (thread_mlfqs) {
+      // If using MLFQ
+  } else {
+    if (t->priority < get_highest_ready_priority()) {
+      intr_yield_on_return(); // Yield if there's a higher priority thread
+    }
+  }
+
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
 }
@@ -183,9 +192,6 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
 
-  /* Initialize donated priority equal to the original priority thread. */
-  t->effective_priority = priority;   
-
   tid = t->tid = allocate_tid ();
 
   /* Stack frame for kernel_thread(). */
@@ -222,11 +228,6 @@ void thread_block (void)
 
   struct thread *current_thread = thread_current ();
   
-  // If the thread is currently in the ready list, remove it
-  if (current_thread->status == THREAD_READY) {
-      list_remove(&current_thread->elem);  // Remove from ready list
-  }
-  
   // Change the thread's status to blocked
   current_thread->status = THREAD_BLOCKED;
   
@@ -244,23 +245,47 @@ void thread_block (void)
    it may expect that it can atomically unblock a thread and
    update other data. */
 void
-thread_unblock (struct thread *t) 
-{
+thread_unblock (struct thread *t) {
   enum intr_level old_level;
 
   ASSERT (is_thread (t));
-  old_level = intr_disable ();
 
+  old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
+
+  // Insert the thread into the ready list, maintaining priority order
+  if (t != idle_thread) 
+    list_insert_ordered(&ready_list, &t->elem, choose_higher_priority_thread, NULL);
   t->status = THREAD_READY;
-  list_insert_ordered(&ready_list, &t->elem, choose_higher_priority_thread, NULL);
-  if (thread_get_priority() < t->effective_priority)
-  {
-    thread_yield();
+  intr_set_level (old_level);
+
+  if (!list_empty(&ready_list)) {
+    struct thread *next = list_entry(list_front(&ready_list), struct thread, elem);
+    if (thread_current()->effective_priority < next->effective_priority) {
+      thread_test_preemption();
+    }
   }
-  
-  intr_set_level(old_level);
+
 }
+   
+void
+thread_test_preemption (void)
+{
+  enum intr_level old_level = intr_disable ();
+  if (!list_empty (&ready_list) && thread_current ()->priority < 
+      list_entry (list_front (&ready_list), struct thread, elem)->priority)
+      thread_yield ();
+  intr_set_level (old_level);
+}
+
+
+int
+get_highest_ready_priority(void) {
+  if (list_empty(&ready_list))
+    return PRI_MIN; // Minimum priority if nothing is ready
+  return list_entry(list_front(&ready_list), struct thread, elem)->priority;
+}
+
 
 
 bool choose_higher_priority_thread(const struct list_elem *elem1, const struct list_elem *elem2, void *aux UNUSED){
@@ -325,22 +350,28 @@ thread_exit (void)
 
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
+
+
 void
 thread_yield (void) 
 {
+
   struct thread *cur = thread_current ();
+  printf("Test Current thread: %s (priority %d)\n", thread_current()->name, thread_current()->effective_priority);
+  printf("Test P thread: %s (priority %d)\n", list_entry (list_front (&ready_list), struct thread, elem)->name, list_entry (list_front (&ready_list), struct thread, elem)->effective_priority);
+
+
   enum intr_level old_level;
   
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  cur->status = THREAD_READY;
   if (cur != idle_thread) 
     list_insert_ordered (&ready_list, &cur->elem, choose_higher_priority_thread, NULL);
+  cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
 }
-
 /* Invoke function 'func' on all threads, passing along 'aux'.
    This function must be called with interrupts off. */
 void
@@ -372,9 +403,9 @@ thread_set_priority (int new_priority)
   if (!list_empty(&ready_list)) {
     struct thread *next = list_entry(list_front(&ready_list), struct thread, elem);
     if (curr->effective_priority < next->effective_priority) {
-        thread_yield();
+      thread_test_preemption();
     }
-}
+  }
 
 }
 
@@ -598,6 +629,7 @@ schedule (void)
   struct thread *cur = running_thread ();
   struct thread *next = next_thread_to_run ();
   struct thread *prev = NULL;
+  
 
   ASSERT (intr_get_level () == INTR_OFF);
   ASSERT (cur->status != THREAD_RUNNING);
