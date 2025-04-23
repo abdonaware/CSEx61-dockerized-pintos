@@ -7,6 +7,8 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+
+extern struct thread *idle_thread;
   
 /* See [8254] for hardware details of the 8254 timer chip. */
 
@@ -172,6 +174,19 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+  if(thread_mlfqs){
+    increase_recent_cpu();
+  
+    if (ticks % TIMER_FREQ == 0) {
+      update_load_avg();
+      update_recent_cpu_for_all_threads();
+    }
+  
+    if (ticks % 4 == 0) {
+      update_priority_for_all_threads();
+    }
+  }
+
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
@@ -244,3 +259,5 @@ real_time_delay (int64_t num, int32_t denom)
   ASSERT (denom % 1000 == 0);
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
 }
+
+
