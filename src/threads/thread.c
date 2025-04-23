@@ -354,7 +354,12 @@ void
 thread_set_nice (int nice UNUSED) 
 {
   thread_current()->nice = nice;
-  /////////////////////////////////////\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\/
+  
+  if (thread_mlfqs) {
+    update_priority(thread_current());
+    thread_yield();
+  }
+
 }
 
 /* Returns the current thread's nice value. */
@@ -498,6 +503,55 @@ next_thread_to_run (void)
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
+void update_priority(struct thread *t) {
+  if (t != idle_thread) {
+    t->priority = PRI_MAX - FP_TO_INT_NEAREST(DIV_MIX(t->recent_cpu, 4)) - (t->nice * 2);
+    if (t->priority > PRI_MAX) t->priority = PRI_MAX;
+    if (t->priority < PRI_MIN) t->priority = PRI_MIN;
+  }
+}
+
+void update_priority_for_all_threads(){
+  struct list_elem *e;
+    for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)) {
+      struct thread *t = list_entry (e, struct thread, allelem);
+      if (t != idle_thread) {
+        t->priority = PRI_MAX - FP_TO_INT_NEAREST (DIV_MIX (t->recent_cpu, 4)) - (t->nice * 2);
+        if (t->priority > PRI_MAX)
+          t->priority = PRI_MAX;
+        if (t->priority < PRI_MIN)
+          t->priority = PRI_MIN;
+      }
+    }
+}
+
+void update_recent_cpu_for_all_threads(){
+  struct list_elem *e;
+  fixed_point coefficient = DIV_FP(MUL_MIX(load_avg, 2), ADD_MIX(MUL_MIX(load_avg, 2), 1));
+  for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)) {
+    struct thread *t = list_entry(e, struct thread, allelem);
+    if (t != idle_thread) {
+      t->recent_cpu = ADD_MIX(MUL_FP(coefficient, t->recent_cpu), t->nice);
+    }
+  }
+}
+
+void update_load_avg(){
+  int ready_threads = list_size(&ready_list);
+  if (thread_current() != idle_thread){
+      ready_threads++;}
+  load_avg = ADD_FP(
+                MUL_FP(DIV_MIX(INT_TO_FP(59), 60), load_avg),
+                MUL_MIX(DIV_MIX(INT_TO_FP(1), 60), ready_threads));
+}
+
+void increase_recent_cpu(){
+  if (thread_current() != idle_thread){
+    thread_current()->recent_cpu = ADD_MIX(thread_current()->recent_cpu, 1);
+  }
+}
+
+
 /* Completes a thread switch by activating the new thread's page
    tables, and, if the previous thread is dying, destroying it.
 
@@ -514,7 +568,8 @@ next_thread_to_run (void)
 
    After this function and its caller returns, the thread switch
    is complete. */
-void
+
+   void
 thread_schedule_tail (struct thread *prev)
 {
   struct thread *cur = running_thread ();
@@ -568,6 +623,10 @@ schedule (void)
 }
 
 /* Returns a tid to use for a new thread. */
+
+
+
+
 static tid_t
 allocate_tid (void) 
 {
@@ -580,6 +639,8 @@ allocate_tid (void)
 
   return tid;
 }
+
+
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
