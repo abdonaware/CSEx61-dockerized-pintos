@@ -200,6 +200,9 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  if (priority > thread_current()->priority) {
+    thread_yield();
+  }
 
   return tid;
 }
@@ -219,6 +222,10 @@ thread_block (void)
   thread_current ()->status = THREAD_BLOCKED;
   schedule ();
 }
+bool thread_priority_more(const struct list_elem *a, const struct list_elem *b, void *aux) {
+  return list_entry(a, struct thread, elem)->priority > list_entry(b, struct thread, elem)->priority;
+}
+
 
 /* Transitions a blocked thread T to the ready-to-run state.
    This is an error if T is not blocked.  (Use thread_yield() to
@@ -237,9 +244,10 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  list_insert_ordered(&ready_list, &t->elem, thread_priority_more, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
+  
 }
 
 /* Returns the name of the running thread. */
@@ -307,8 +315,10 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+  if (cur != idle_thread) {
+    // Insert into ready_list by priority
+    list_insert_ordered(&ready_list, &cur->elem, thread_priority_more, NULL);
+  }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -323,7 +333,7 @@ thread_foreach (thread_action_func *func, void *aux)
 
   ASSERT (intr_get_level () == INTR_OFF);
 
-  for (e = list_begin (&all_list); e != list_end (&all_list);
+  for (e = list_begin (&ready_list); e != list_end (&ready_list);
        e = list_next (e))
     {
       struct thread *t = list_entry (e, struct thread, allelem);
@@ -335,7 +345,13 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  struct thread *cur = thread_current ();
+  if (cur->priority > new_priority) {
+    cur->priority = new_priority;
+    thread_yield ();
+  }else {
+    cur->priority = new_priority;
+  }
 }
 
 /* Returns the current thread's priority. */
