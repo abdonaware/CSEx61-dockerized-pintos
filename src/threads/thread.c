@@ -275,6 +275,9 @@ thread_current (void)
 
   return t;
 }
+void sort_ready_list(void) {
+  list_sort(&ready_list, thread_priority_more, NULL);
+}
 
 /* Returns the running thread's tid. */
 tid_t
