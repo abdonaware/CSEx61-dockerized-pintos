@@ -141,6 +141,8 @@ thread_tick (void)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
+
+
 }
 
 /* Prints thread statistics. */
@@ -523,6 +525,9 @@ void update_priority_for_all_threads(){
           t->priority = PRI_MIN;
       }
     }
+    if (!intr_context()){
+      thread_yield();
+    }
 }
 
 void update_recent_cpu_for_all_threads(){
@@ -537,12 +542,16 @@ void update_recent_cpu_for_all_threads(){
 }
 
 void update_load_avg(){
+  // printf("load_avg: %d\n", FP_TO_INT_NEAREST(load_avg));
+
   int ready_threads = list_size(&ready_list);
+  // printf("ready_threads: %d\n", ready_threads);
+
   if (thread_current() != idle_thread){
       ready_threads++;}
   load_avg = ADD_FP(
-                MUL_FP(DIV_MIX(INT_TO_FP(59), 60), load_avg),
-                MUL_MIX(DIV_MIX(INT_TO_FP(1), 60), ready_threads));
+                MUL_FP(DIV_FP(INT_TO_FP(59),INT_TO_FP(60)), load_avg),
+                MUL_MIX(DIV_FP(INT_TO_FP(1), INT_TO_FP(60)), ready_threads));
 }
 
 void increase_recent_cpu(){
