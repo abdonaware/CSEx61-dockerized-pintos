@@ -88,8 +88,8 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    int effectivePriority;         /* Effective priority. */
-    struct list donated_lockes;                  /* Number of donated priorities. */
+    int effectivePriority;              /* Effective priority. */
+    struct list donated_lockes;         /* Number of donated priorities. */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -136,8 +136,8 @@ void sort_ready_list(void);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
-int thread_get_effective_priority (void);
-void thread_set_effective_priority (int , struct thread *);
+int thread_get_effectivePriority (void);
+void thread_set_effectivePriority (int , struct thread *);
 
 int thread_get_nice (void);
 void thread_set_nice (int);

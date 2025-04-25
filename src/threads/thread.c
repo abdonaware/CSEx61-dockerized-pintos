@@ -234,7 +234,7 @@ thread_block (void)
 bool thread_priority_more(const struct list_elem *a, const struct list_elem *b, void *aux) {
   return list_entry(a, struct thread, elem)->priority > list_entry(b, struct thread, elem)->priority;
 }
-bool thread_effective_priority_more(const struct list_elem *a, const struct list_elem *b, void *aux) {
+bool thread_effectivePriority_more(const struct list_elem *a, const struct list_elem *b, void *aux) {
   return list_entry(a, struct thread, elem)->effectivePriority > list_entry(b, struct thread, elem)->effectivePriority;
 }
 
@@ -256,12 +256,7 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-<<<<<<< HEAD
-  list_insert_ordered (&ready_list, &t->elem,
-                       thread_priority_large, NULL);
-=======
-  list_insert_ordered(&ready_list, &t->elem,thread_effective_priority_more , NULL);
->>>>>>> AbdElrahaman-Priority-Scheduling
+  list_insert_ordered(&ready_list, &t->elem,thread_effectivePriority_more , NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
   
@@ -293,7 +288,7 @@ thread_current (void)
   return t;
 }
 void sort_ready_list(void) {
-  list_sort(&ready_list, thread_effective_priority_more, NULL);
+  list_sort(&ready_list, thread_effectivePriority_more, NULL);
 }
 void add_to_ready_list(struct thread *t) {
   list_insert_ordered(&ready_list, &t->elem, thread_priority_more, NULL);
@@ -341,7 +336,7 @@ thread_yield (void)
   old_level = intr_disable ();
   if (cur != idle_thread) {
     // Insert into ready_list by priority
-    list_insert_ordered(&ready_list, &cur->elem, thread_effective_priority_more, NULL);
+    list_insert_ordered(&ready_list, &cur->elem, thread_effectivePriority_more, NULL);
   }
   cur->status = THREAD_READY;
   schedule ();
@@ -427,8 +422,8 @@ void
 thread_test_preemption (void)
 {
   enum intr_level old_level = intr_disable ();
-  if (!list_empty (&ready_list) && thread_current ()->effective_priority < 
-      list_entry (list_front (&ready_list), struct thread, elem)->effective_priority)
+  if (!list_empty (&ready_list) && thread_current ()->effectivePriority < 
+      list_entry (list_front (&ready_list), struct thread, elem)->effectivePriority)
       thread_yield ();
   intr_set_level (old_level);
 }
@@ -623,13 +618,13 @@ thread_schedule_tail (struct thread *prev)
     }
 }
 
-int thread_get_effective_priority (void){
+int thread_get_effectivePriority (void){
   return thread_current()->effectivePriority;
 }
-void thread_set_effective_priority (int new_effective_priority,
+void thread_set_effectivePriority (int new_effectivePriority,
                                     struct thread *t){
   ASSERT (is_thread (t));
-  thread_current()->effectivePriority = new_effective_priority;
+  thread_current()->effectivePriority = new_effectivePriority;
 
 }
 
