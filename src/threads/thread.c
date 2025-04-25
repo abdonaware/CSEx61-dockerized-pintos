@@ -206,6 +206,9 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  if (priority > thread_current()->priority) {
+    thread_yield();
+  }
 
   /* Test preemtpion. */
   thread_test_preemption ();
@@ -228,6 +231,13 @@ thread_block (void)
   thread_current ()->status = THREAD_BLOCKED;
   schedule ();
 }
+bool thread_priority_more(const struct list_elem *a, const struct list_elem *b, void *aux) {
+  return list_entry(a, struct thread, elem)->priority > list_entry(b, struct thread, elem)->priority;
+}
+bool thread_effective_priority_more(const struct list_elem *a, const struct list_elem *b, void *aux) {
+  return list_entry(a, struct thread, elem)->effectivePriority > list_entry(b, struct thread, elem)->effectivePriority;
+}
+
 
 /* Transitions a blocked thread T to the ready-to-run state.
    This is an error if T is not blocked.  (Use thread_yield() to
@@ -246,10 +256,15 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
+<<<<<<< HEAD
   list_insert_ordered (&ready_list, &t->elem,
                        thread_priority_large, NULL);
+=======
+  list_insert_ordered(&ready_list, &t->elem,thread_effective_priority_more , NULL);
+>>>>>>> AbdElrahaman-Priority-Scheduling
   t->status = THREAD_READY;
   intr_set_level (old_level);
+  
 }
 
 /* Returns the name of the running thread. */
@@ -277,6 +292,13 @@ thread_current (void)
 
   return t;
 }
+void sort_ready_list(void) {
+  list_sort(&ready_list, thread_effective_priority_more, NULL);
+}
+void add_to_ready_list(struct thread *t) {
+  list_insert_ordered(&ready_list, &t->elem, thread_priority_more, NULL);
+}
+
 
 /* Returns the running thread's tid. */
 tid_t
@@ -317,9 +339,10 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
-    list_insert_ordered (&ready_list, &cur->elem,
-                         thread_priority_large, NULL);
+  if (cur != idle_thread) {
+    // Insert into ready_list by priority
+    list_insert_ordered(&ready_list, &cur->elem, thread_effective_priority_more, NULL);
+  }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -334,7 +357,7 @@ thread_foreach (thread_action_func *func, void *aux)
 
   ASSERT (intr_get_level () == INTR_OFF);
 
-  for (e = list_begin (&all_list); e != list_end (&all_list);
+  for (e = list_begin (&ready_list); e != list_end (&ready_list);
        e = list_next (e))
     {
       struct thread *t = list_entry (e, struct thread, allelem);
@@ -348,33 +371,20 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  if (thread_mlfqs)
-    return;
-  
-  enum intr_level old_level = intr_disable ();
-  struct thread *t = thread_current ();
-  int old_priority = t->effective_priority;
-
-  /* Always update base priority. */
-  t->priority = new_priority;
-
-  /* Only update priority and test preemption if new priority
-     is smaller and current priority is not donated by another
-     thread. */
-  if (new_priority < old_priority)
-    {
-      t->effective_priority = new_priority;
-      thread_test_preemption ();
-    }
-
-  intr_set_level (old_level);
+  struct thread *cur = thread_current ();
+  if (cur->priority > new_priority) {
+    cur->priority = new_priority;
+    thread_yield ();
+  }else {
+    cur->priority = new_priority;
+  }
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  return thread_current ()->effectivePriority;
 }
 
 
@@ -519,12 +529,23 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->effective_priority = priority;
+  t->effectivePriority = priority;
+  list_init(&t->donated_lockes);
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
+}
+
+bool is_list_have_this_elemet(struct list *list, struct list_elem *t) {
+  struct list_elem *e;
+  for (e = list_begin(list); e != list_end(list); e = list_next(e)) {
+    if (e==t) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -598,6 +619,16 @@ thread_schedule_tail (struct thread *prev)
       ASSERT (prev != cur);
       palloc_free_page (prev);
     }
+}
+
+int thread_get_effective_priority (void){
+  return thread_current()->effectivePriority;
+}
+void thread_set_effective_priority (int new_effective_priority,
+                                    struct thread *t){
+  ASSERT (is_thread (t));
+  thread_current()->effectivePriority = new_effective_priority;
+
 }
 
 /* Schedules a new process.  At entry, interrupts must be off and
