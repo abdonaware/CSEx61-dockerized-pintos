@@ -225,6 +225,9 @@ thread_block (void)
 bool thread_priority_more(const struct list_elem *a, const struct list_elem *b, void *aux) {
   return list_entry(a, struct thread, elem)->priority > list_entry(b, struct thread, elem)->priority;
 }
+bool thread_effective_priority_more(const struct list_elem *a, const struct list_elem *b, void *aux) {
+  return list_entry(a, struct thread, elem)->effectivePriority > list_entry(b, struct thread, elem)->effectivePriority;
+}
 
 
 /* Transitions a blocked thread T to the ready-to-run state.
@@ -244,7 +247,7 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_insert_ordered(&ready_list, &t->elem, thread_priority_more, NULL);
+  list_insert_ordered(&ready_list, &t->elem,thread_effective_priority_more , NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
   
@@ -276,8 +279,12 @@ thread_current (void)
   return t;
 }
 void sort_ready_list(void) {
-  list_sort(&ready_list, thread_priority_more, NULL);
+  list_sort(&ready_list, thread_effective_priority_more, NULL);
 }
+void add_to_ready_list(struct thread *t) {
+  list_insert_ordered(&ready_list, &t->elem, thread_priority_more, NULL);
+}
+
 
 /* Returns the running thread's tid. */
 tid_t
@@ -320,7 +327,7 @@ thread_yield (void)
   old_level = intr_disable ();
   if (cur != idle_thread) {
     // Insert into ready_list by priority
-    list_insert_ordered(&ready_list, &cur->elem, thread_priority_more, NULL);
+    list_insert_ordered(&ready_list, &cur->elem, thread_effective_priority_more, NULL);
   }
   cur->status = THREAD_READY;
   schedule ();
@@ -361,7 +368,7 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  return thread_current ()->effectivePriority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -482,11 +489,22 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->effectivePriority = priority;
+  list_init(&t->donated_lockes);
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
+}
+
+bool is_list_have_this_elemet(struct list *list, struct list_elem *t) {
+  struct list_elem *e;
+  for (e = list_begin(list); e != list_end(list); e = list_next(e)) {
+    if (e==t) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
