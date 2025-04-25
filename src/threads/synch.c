@@ -201,31 +201,34 @@ lock_acquire (struct lock *lock)
   ASSERT (!lock_held_by_current_thread (lock));
 
   struct thread *cur = thread_current();
-  if (lock->holder != NULL && cur->effectivePriority > lock->holder->effectivePriority && lock->semaphore.value == 0 ) {
-    /*Push if not found else remove then push*/
-    if (lock->is_donated) {
-      list_remove(&lock->elem);
-      cur->superior_thread_elem = &lock->holder;
-    }else{
-      cur->superior_thread_elem = NULL;
-    }
-    lock->is_donated = 1;
-    
-    lock->holder->effectivePriority = cur->priority;
-    lock->lock_donated_priority = cur->priority;
-    list_push_front(&lock->holder->donated_lockes, &lock->elem);
-    
-    while (cur->superior_thread_elem != NULL)
-    {
-      if(cur->superior_thread_elem->effectivePriority < cur->effectivePriority){ 
-        cur->superior_thread_elem->effectivePriority = cur->effectivePriority;
+  if (lock->holder != NULL  && lock->semaphore.value == 0 ) {
+    if (cur->effectivePriority > lock->holder->effectivePriority)
+    {    
+      /*Push if not found else remove then push*/
+      if (lock->is_donated) {
+        list_remove(&lock->elem);
       }
-      cur->superior_thread_elem = cur->superior_thread_elem->superior_thread_elem;
-      cur
-    }
+      lock->is_donated = 1;
 
-    sort_ready_list();
-    thread_yield();
+      cur->superior_thread_elem = lock->holder;
+            
+      lock->holder->effectivePriority = cur->effectivePriority;
+      lock->lock_donated_priority = cur->effectivePriority;
+      list_push_front(&lock->holder->donated_lockes, &lock->elem);
+      
+      while (cur->superior_thread_elem != NULL) {
+          if (cur->superior_thread_elem->effectivePriority < cur->effectivePriority) {
+            cur->superior_thread_elem->effectivePriority = cur->effectivePriority;
+          }
+          cur = cur->superior_thread_elem;
+      }
+      
+
+      sort_ready_list();
+      thread_yield();
+    }
+  }else{
+    cur->superior_thread_elem = NULL;
   }
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
@@ -256,34 +259,41 @@ lock_try_acquire (struct lock *lock)
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
    handler. */
-void
-lock_release (struct lock *lock) 
-{
-  ASSERT (lock != NULL);
-  ASSERT (lock_held_by_current_thread (lock));
-  if (lock->is_donated && !list_empty(&lock->holder->donated_lockes)) {
-    if (lock->lock_donated_priority == lock -> holder->effectivePriority ){
-      list_remove(&lock->elem);
-      if (!list_empty(&lock->holder->donated_lockes)){
-        struct lock *t = list_entry(list_front(&lock->holder->donated_lockes), struct lock, elem);
-        lock->holder->effectivePriority = t->lock_donated_priority;
-        sort_ready_list();
-      }else{
-        lock->holder->effectivePriority = lock->holder->priority;
-        sort_ready_list();
-      }
-      lock->is_donated = 0;
-      lock->lock_donated_priority = 0;
-    }else{
-      list_remove(&lock->elem);
-      lock->is_donated = 0;
-      lock->lock_donated_priority = 0;
-    }
-  }
-
-  lock->holder = NULL;
-  sema_up (&lock->semaphore);
-}
+   void
+   lock_release (struct lock *lock)
+   {
+     ASSERT (lock != NULL);
+     ASSERT (lock_held_by_current_thread (lock));
+   
+     struct thread *cur = thread_current ();
+     lock->holder = NULL;
+   
+     // Remove donation related to this lock
+     if (!list_empty(&cur->donated_lockes)) {
+       struct list_elem *e = list_begin(&cur->donated_lockes);
+       while (e != list_end(&cur->donated_lockes)) {
+         struct lock *l = list_entry(e, struct lock, elem);
+         e = list_next(e);
+         if (l == lock) {
+           list_remove(&l->elem);
+           break;
+         }
+       }
+     }
+   
+     // Recalculate priority
+     cur->effectivePriority = cur->priority;
+     for (struct list_elem *e = list_begin(&cur->donated_lockes); e != list_end(&cur->donated_lockes); e = list_next(e)) {
+       struct lock *l = list_entry(e, struct lock, elem);
+       if (l->lock_donated_priority > cur->effectivePriority) {
+         cur->effectivePriority = l->lock_donated_priority;
+       }
+     }
+   
+     sema_up(&lock->semaphore);
+     thread_test_preemption(); // Yield if higher-priority thread is ready
+   }
+   
 
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds
