@@ -374,9 +374,11 @@ thread_set_priority (int new_priority)
   struct thread *cur = thread_current ();
   if (cur->priority > new_priority) {
     cur->priority = new_priority;
+    cur->effectivePriority = new_priority;
     thread_yield ();
   }else {
     cur->priority = new_priority;
+    cur->effectivePriority = new_priority;
   }
 }
 
