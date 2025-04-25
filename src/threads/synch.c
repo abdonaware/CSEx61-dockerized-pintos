@@ -202,14 +202,28 @@ lock_acquire (struct lock *lock)
 
   struct thread *cur = thread_current();
   if (lock->holder != NULL && cur->effectivePriority > lock->holder->effectivePriority && lock->semaphore.value == 0 ) {
+    /*Push if not found else remove then push*/
     if (lock->is_donated) {
       list_remove(&lock->elem);
+      cur->superior_thread_elem = &lock->holder;
+    }else{
+      cur->superior_thread_elem = NULL;
     }
     lock->is_donated = 1;
     
-    list_push_front(&lock->holder->donated_lockes, &lock->elem);
     lock->holder->effectivePriority = cur->priority;
     lock->lock_donated_priority = cur->priority;
+    list_push_front(&lock->holder->donated_lockes, &lock->elem);
+    
+    while (cur->superior_thread_elem != NULL)
+    {
+      if(cur->superior_thread_elem->effectivePriority < cur->effectivePriority){ 
+        cur->superior_thread_elem->effectivePriority = cur->effectivePriority;
+      }
+      cur->superior_thread_elem = cur->superior_thread_elem->superior_thread_elem;
+      cur
+    }
+
     sort_ready_list();
     thread_yield();
   }
