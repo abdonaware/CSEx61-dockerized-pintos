@@ -206,9 +206,6 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
-  if (priority > thread_current()->priority) {
-    thread_yield();
-  }
 
   /* Test preemtpion. */
   thread_test_preemption ();
@@ -363,19 +360,30 @@ thread_foreach (thread_action_func *func, void *aux)
 /* Sets the current thread's priority to NEW_PRIORITY.
    If the priority is donated by another thread, it may
    not change immediately. */
-void
-thread_set_priority (int new_priority) 
-{
-  struct thread *cur = thread_current ();
-  if (cur->priority > new_priority) {
-    cur->priority = new_priority;
-    cur->effectivePriority = new_priority;
-    thread_yield ();
-  }else {
-    cur->priority = new_priority;
-    cur->effectivePriority = new_priority;
+  void
+  thread_set_priority (int new_priority) 
+  {
+    if (thread_mlfqs)
+      return;
+    
+    enum intr_level old_level = intr_disable ();
+    struct thread *t = thread_current ();
+    int old_priority = t->effectivePriority;
+  
+    /* Always update base priority. */
+    t->priority = new_priority;
+  
+    /* Only update priority and test preemption if new priority
+      is smaller and current priority is not donated by another
+      thread. */
+    if (new_priority < old_priority && list_empty (&t->donated_lockes))
+      {
+        t->effectivePriority = new_priority;
+        thread_test_preemption ();
+      }
+  
+    intr_set_level (old_level);
   }
-}
 
 /* Returns the current thread's priority. */
 int

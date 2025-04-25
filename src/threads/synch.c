@@ -211,21 +211,22 @@ lock_acquire (struct lock *lock)
       lock->is_donated = 1;
 
       cur->superior_thread_elem = lock->holder;
-            
       lock->holder->effectivePriority = cur->effectivePriority;
       lock->lock_donated_priority = cur->effectivePriority;
+      
       list_push_front(&lock->holder->donated_lockes, &lock->elem);
       
-      while (cur->superior_thread_elem != NULL) {
-          if (cur->superior_thread_elem->effectivePriority < cur->effectivePriority) {
-            cur->superior_thread_elem->effectivePriority = cur->effectivePriority;
+      struct thread *temp = cur;
+      while (temp->superior_thread_elem != NULL) {      
+          if (temp->superior_thread_elem->effectivePriority < temp->effectivePriority) {
+              temp->superior_thread_elem->effectivePriority = temp->effectivePriority;
           }
-          cur = cur->superior_thread_elem;
+      
+          temp = temp->superior_thread_elem;
       }
       
-
       sort_ready_list();
-      thread_yield();
+      thread_test_preemption();
     }
   }else{
     cur->superior_thread_elem = NULL;
