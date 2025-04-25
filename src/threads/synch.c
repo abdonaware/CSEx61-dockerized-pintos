@@ -201,7 +201,7 @@ lock_acquire (struct lock *lock)
   ASSERT (!lock_held_by_current_thread (lock));
 
   struct thread *cur = thread_current();
-  if (lock->holder != NULL && cur->priority > lock->holder->priority && lock->semaphore.value == 0 ) {
+  if (lock->holder != NULL && cur->effectivePriority > lock->holder->effectivePriority && lock->semaphore.value == 0 ) {
     if (lock->is_donated) {
       list_remove(&lock->elem);
     }
