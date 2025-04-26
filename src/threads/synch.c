@@ -212,6 +212,7 @@ lock_acquire (struct lock *lock)
 
       cur->superior_thread_elem = lock->holder;
       lock->holder->effectivePriority = cur->effectivePriority;
+      lock->donor_thread = cur;
       lock->lock_donated_priority = cur->effectivePriority;
       
       list_push_front(&lock->holder->donated_lockes, &lock->elem);
@@ -286,9 +287,9 @@ lock_try_acquire (struct lock *lock)
      cur->effectivePriority = cur->priority;
      for (struct list_elem *e = list_begin(&cur->donated_lockes); e != list_end(&cur->donated_lockes); e = list_next(e)) {
        struct lock *l = list_entry(e, struct lock, elem);
-       if (l->lock_donated_priority > cur->effectivePriority) {
-         cur->effectivePriority = l->lock_donated_priority;
-       }
+       if (l->donor_thread->effectivePriority > cur->effectivePriority) {
+        cur->effectivePriority = l->donor_thread->effectivePriority;
+      }
      }
    
      sema_up(&lock->semaphore);
