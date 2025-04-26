@@ -542,11 +542,7 @@ void update_recent_cpu_for_all_threads(){
 }
 
 void update_load_avg(){
-  // printf("load_avg: %d\n", FP_TO_INT_NEAREST(load_avg));
-
   int ready_threads = list_size(&ready_list);
-  // printf("ready_threads: %d\n", ready_threads);
-
   if (thread_current() != idle_thread){
       ready_threads++;}
   load_avg = ADD_FP(
@@ -554,11 +550,13 @@ void update_load_avg(){
                 MUL_MIX(DIV_FP(INT_TO_FP(1), INT_TO_FP(60)), ready_threads));
 }
 
-void increase_recent_cpu(){
-  if (thread_current() != idle_thread){
-    thread_current()->recent_cpu = ADD_MIX(thread_current()->recent_cpu, 1);
+void increase_recent_cpu() {
+  struct thread *curr = thread_current();
+  if (curr != idle_thread) {
+    curr->recent_cpu = ADD_MIX(curr->recent_cpu, 1);
   }
 }
+
 
 
 /* Completes a thread switch by activating the new thread's page
