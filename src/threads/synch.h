@@ -22,6 +22,10 @@ struct lock
   {
     struct thread *holder;      /* Thread holding lock (for debugging). */
     struct semaphore semaphore; /* Binary semaphore controlling access. */
+    bool  is_donated;  /* True if the lock is donated. */
+    int lock_donated_priority; 
+    struct list_elem elem; /* List element. */
+    struct thread *donor_thread; /* Thread that is donating the priority. */
   };
 
 void lock_init (struct lock *);

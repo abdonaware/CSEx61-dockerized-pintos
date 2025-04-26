@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <threads/fixed-point.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -88,10 +89,18 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int effectivePriority;              /* Effective priority. */
+    struct thread *superior_thread_elem; /* List element of the thread that is blocking the current one. */
+
+    struct list donated_lockes;         /* Number of donated priorities. */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
-    struct list_elem elem;              /* List element. */
+    struct list_elem elem;   
+    int nice;  
+    fixed_point recent_cpu;         /* List element. */
+
+    int64_t waketick;                  /* Tick when thread should wake */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -100,6 +109,8 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+   
   };
 
 /* If false (default), use round-robin scheduler.
@@ -129,9 +140,20 @@ void thread_yield (void);
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
+bool thread_priority_more(const struct list_elem *a, const struct list_elem *b, void *aux);
+bool thread_effectivePriority_more(const struct list_elem *a, const struct list_elem *b, void *aux);
+
+void sort_ready_list(void);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
+int thread_get_effectivePriority (void);
+void thread_set_effectivePriority (int , struct thread *);
+void update_priority_for_all_threads (void);
+void update_recent_cpu_for_all_threads(void);
+void update_load_avg(void);
+void update_priority (struct thread *t);
+void increase_recent_cpu(void);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
