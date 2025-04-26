@@ -76,6 +76,7 @@ bool thread_priority_large(const struct list_elem *a,
   void *aux UNUSED);
 
 void thread_test_preemption (void);
+bool thread_effectivePriority_more(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
