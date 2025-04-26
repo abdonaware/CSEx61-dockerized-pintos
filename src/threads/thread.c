@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/fixed-point.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -36,6 +37,8 @@ static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
+
+static fixed_point load_avg;
 
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
@@ -100,6 +103,7 @@ thread_init (void)
   list_init (&ready_list);
   list_init (&all_list);
 
+  load_avg = 0;
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
@@ -144,6 +148,8 @@ thread_tick (void)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
+
+
 }
 
 /* Prints thread statistics. */
@@ -398,31 +404,34 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice UNUSED) 
 {
-  /* Not yet implemented. */
+  thread_current()->nice = nice;
+  
+  if (thread_mlfqs) {
+    update_priority(thread_current());
+    thread_yield();
+  }
+
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return FP_TO_INT_NEAREST(MUL_MIX(load_avg, 100));
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return FP_TO_INT_NEAREST(MUL_MIX(thread_current()->recent_cpu, 100));
 }
 
 
@@ -581,6 +590,60 @@ next_thread_to_run (void)
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
+void update_priority(struct thread *t) {
+  if (t != idle_thread) {
+    t->priority = PRI_MAX - FP_TO_INT_NEAREST(DIV_MIX(t->recent_cpu, 4)) - (t->nice * 2);
+    if (t->priority > PRI_MAX) t->priority = PRI_MAX;
+    if (t->priority < PRI_MIN) t->priority = PRI_MIN;
+  }
+}
+
+void update_priority_for_all_threads(){
+  struct list_elem *e;
+    for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)) {
+      struct thread *t = list_entry (e, struct thread, allelem);
+      if (t != idle_thread) {
+        t->priority = PRI_MAX - FP_TO_INT_NEAREST (DIV_MIX (t->recent_cpu, 4)) - (t->nice * 2);
+        if (t->priority > PRI_MAX)
+          t->priority = PRI_MAX;
+        if (t->priority < PRI_MIN)
+          t->priority = PRI_MIN;
+      }
+    }
+    if (!intr_context()){
+      thread_yield();
+    }
+}
+
+void update_recent_cpu_for_all_threads(){
+  struct list_elem *e;
+  fixed_point coefficient = DIV_FP(MUL_MIX(load_avg, 2), ADD_MIX(MUL_MIX(load_avg, 2), 1));
+  for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)) {
+    struct thread *t = list_entry(e, struct thread, allelem);
+    if (t != idle_thread) {
+      t->recent_cpu = ADD_MIX(MUL_FP(coefficient, t->recent_cpu), t->nice);
+    }
+  }
+}
+
+void update_load_avg(){
+  int ready_threads = list_size(&ready_list);
+  if (thread_current() != idle_thread){
+      ready_threads++;}
+  load_avg = ADD_FP(
+                MUL_FP(DIV_FP(INT_TO_FP(59),INT_TO_FP(60)), load_avg),
+                MUL_MIX(DIV_FP(INT_TO_FP(1), INT_TO_FP(60)), ready_threads));
+}
+
+void increase_recent_cpu() {
+  struct thread *curr = thread_current();
+  if (curr != idle_thread) {
+    curr->recent_cpu = ADD_MIX(curr->recent_cpu, 1);
+  }
+}
+
+
+
 /* Completes a thread switch by activating the new thread's page
    tables, and, if the previous thread is dying, destroying it.
 
@@ -597,7 +660,8 @@ next_thread_to_run (void)
 
    After this function and its caller returns, the thread switch
    is complete. */
-void
+
+   void
 thread_schedule_tail (struct thread *prev)
 {
   struct thread *cur = running_thread ();
@@ -661,6 +725,10 @@ schedule (void)
 }
 
 /* Returns a tid to use for a new thread. */
+
+
+
+
 static tid_t
 allocate_tid (void) 
 {
@@ -673,6 +741,8 @@ allocate_tid (void)
 
   return tid;
 }
+
+
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
