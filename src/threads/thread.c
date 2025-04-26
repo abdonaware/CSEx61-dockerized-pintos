@@ -612,6 +612,7 @@ void update_priority_for_all_threads(){
         t->effectivePriority = t->priority;
       }
     }
+    sort_ready_list();
     if (!intr_context()){
       thread_yield();
     }
