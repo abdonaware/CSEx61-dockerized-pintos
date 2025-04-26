@@ -550,6 +550,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
+  // list_insert_ordered(&all_list, &t->allelem, thread_effectivePriority_more,NULL);
   intr_set_level (old_level);
 }
 
@@ -608,6 +609,7 @@ void update_priority_for_all_threads(){
           t->priority = PRI_MAX;
         if (t->priority < PRI_MIN)
           t->priority = PRI_MIN;
+        t->effectivePriority = t->priority;
       }
     }
     if (!intr_context()){
