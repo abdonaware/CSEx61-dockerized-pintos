@@ -77,6 +77,10 @@ start_process (void *file_name_)
 	if (!success)
 		thread_exit ();
 
+	struct thread *t = thread_current();
+	list_init(&t->file_list);
+    t->next_fd = 2;
+
 	/* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its

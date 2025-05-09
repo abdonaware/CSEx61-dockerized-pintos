@@ -92,15 +92,25 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    struct list file_list;             /* List of open files */
+    int next_fd;                      /* Next file descriptor to allocate */
+
+    uint32_t *pagedir;                  /* Page directory. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
-    uint32_t *pagedir;                  /* Page directory. */
+    
 #endif
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+struct file_descriptor {
+   int fd;                     /* File descriptor number */
+   struct file *file_ptr;      /* Pointer to the file */
+   struct list_elem elem;      /* List element */
+ };
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
