@@ -83,6 +83,9 @@ typedef int tid_t;
 struct thread
   {
     /* Owned by thread.c. */
+    int exit_status;                    /*This is returned to parent process after child
+                                          termination to determine status of child*/
+                                          
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */

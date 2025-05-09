@@ -3,6 +3,8 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
+
 
 static void syscall_handler(struct intr_frame *f UNUSED);
 static void get_args(struct intr_frame *f, int *args, int num);
@@ -27,64 +29,89 @@ static void syscall_handler(struct intr_frame *f UNUSED)
   int syscall_number = *(int *)f->esp;
   int *arg = (int *)f->esp;
 
+  int fd;
+  int status;
+  char *cmdline;
+  int pid;
+  char *file;
+  unsigned initial_size;
+  void *buffer;
+  unsigned size;
+  unsigned position;
+
   switch (syscall_number)
   {
-
   case SYS_HALT:
+    // implement halt
     break;
 
   case SYS_EXIT:
-    int status = arg[1];
+    status = arg[1];
+    // implement exit with status
     break;
 
   case SYS_EXEC:
-    char *cmdline = (char *)arg[1];
+    cmdline = (char *)arg[1];
+    if (!valid(cmdline)) exit(-1);
+
+    pid_t pid = exec(cmdline);
+    f->eax = pid;
     break;
 
   case SYS_WAIT:
-    int pid = arg[1];
+    pid = arg[1];
+    // implement wait with pid
     break;
 
   case SYS_CREATE:
-    char *file = (char *)arg[1];
-    unsigned initial_size = arg[2];
+    file = (char *)arg[1];
+    initial_size = arg[2];
+    // implement create
     break;
 
   case SYS_REMOVE:
-    char *file = (char *)arg[1];
+    file = (char *)arg[1];
+    // implement remove
     break;
 
   case SYS_OPEN:
-    char *file = (char *)arg[1];
+    file = (char *)arg[1];
+    // implement open
     break;
 
   case SYS_FILESIZE:
-    int fd = arg[1];
+    fd = arg[1];
+    // implement filesize
     break;
 
   case SYS_READ:
-    int fd = arg[1];
-    void *buffer = (void *)arg[2];
-    unsigned size = arg[3];
+    fd = arg[1];
+    buffer = (void *)arg[2];
+    size = arg[3];
+    // implement read
     break;
 
   case SYS_WRITE:
-    int fd = arg[1];
-    void *buffer = (void *)arg[2];
-    unsigned size = arg[3];
+    fd = arg[1];
+    buffer = (void *)arg[2];
+    size = arg[3];
+    // implement write
     break;
 
   case SYS_SEEK:
-    int fd = arg[1];
-    unsigned position = arg[2];
+    fd = arg[1];
+    position = arg[2];
+    // implement seek
     break;
 
   case SYS_TELL:
-    int fd = arg[1];
+    fd = arg[1];
+    // implement tell
     break;
 
   case SYS_CLOSE:
-    int fd = arg[1];
+    fd = arg[1];
+    // implement close
     break;
 
   default:
@@ -92,6 +119,7 @@ static void syscall_handler(struct intr_frame *f UNUSED)
     thread_exit();
   }
 }
+
 
 // SYS_HALT,                   /* Halt the operating system. */
 //     SYS_EXIT,                   /* Terminate this process. */
@@ -114,5 +142,18 @@ bool valid(void *vaddr)
 }
 void kill(void)
 {
-  exit(-1);
+  //exit(-1);
+  /*Not implemented*/
+}
+
+void exit(int status) {
+    struct thread *cur = thread_current();
+    cur->exit_status = status;  // Save the exit status, so that parent has access to it
+    printf("%s: exit(%d)\n", cur->name, status);
+    thread_exit();  // Clean up and terminate
+}
+
+
+pid_t exec (const char *cmd_line) {
+    
 }
