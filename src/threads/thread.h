@@ -112,6 +112,7 @@ struct file_descriptor {
    int fd;                     /* File descriptor number */
    struct file *file_ptr;      /* Pointer to the file */
    struct list_elem elem;      /* List element */
+   struct lock *read_write_lock; /* Semaphore for synchronization between writing and reading  */
  };
 
 /* If false (default), use round-robin scheduler.
