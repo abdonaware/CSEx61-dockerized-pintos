@@ -21,6 +21,12 @@ void kill(void);
 bool create(const char *file, unsigned initial_size);
 bool remove(const char *file);
 int open(const char *file);
+int get_file_size(int fd);
+int read(int fd, void *buffer, unsigned size);
+int write(int fd, const void *buffer, unsigned size);
+void seek(int fd, unsigned position);
+unsigned tell(int fd);
+void close(int fd);
 
 void syscall_init(void)
 {
@@ -54,17 +60,21 @@ static void syscall_handler(struct intr_frame *f UNUSED)
   case SYS_EXIT:
   {
     int status = arg[1];
+    if (!valid((void *)status))
+      kill();
+    printf("%s: exit(%d)\n", thread_current()->name, status);
+    exit(status);
     break;
   }
 
   case SYS_EXEC:
   {
-    char *cmdline = (char *)arg[1];
-    if (!valid(cmdline))
-      exit(-1);
+    // char *cmdline = (char *)arg[1];
+    // if (!valid(cmdline))
+    //   exit(-1);
 
-    pid_t pid = exec(cmdline);
-    f->eax = pid;
+    // pid_t pid = exec(cmdline);
+    // f->eax = pid;
     break;
   }
 
@@ -337,6 +347,7 @@ unsigned tell(int fd)
       return file_tell(fd_elem->file_ptr);
     }
   }
+  return -1; // File descriptor not found
 }
 void close(int fd)
 {
@@ -357,6 +368,7 @@ void close(int fd)
   }
 }
 
-pid_t exec(const char *cmd_line)
-{
-}
+// pid_t exec(const char *cmd_line)
+// {
+
+// }
