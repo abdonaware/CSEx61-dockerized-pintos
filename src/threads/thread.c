@@ -245,7 +245,7 @@ thread_unblock (struct thread *t)
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+	list_push_front (&ready_list, &t->elem);
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -473,6 +473,7 @@ init_thread (struct thread *t, const char *name, int priority)
 	list_init(&t->file_list);
     t->next_fd = 2;
 	t->magic = THREAD_MAGIC;
+	list_init(&t->child);
 
 	old_level = intr_disable ();
 	list_push_back (&all_list, &t->allelem);

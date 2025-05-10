@@ -28,6 +28,12 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp, char** s
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
+   struct process_start 
+   {
+	char *fn_copy;
+	struct thread *parent_thraed;
+   };
+   
 tid_t
 process_execute (const char *file_name) 
 {
@@ -44,20 +50,39 @@ process_execute (const char *file_name)
 	/* Parsed file name */
 	char *save_ptr;
 	file_name = strtok_r((char *) file_name, " ", &save_ptr);
+	struct process_start *start = malloc(sizeof(struct process_start));
+	start->fn_copy = fn_copy;
+	start->parent_thraed = thread_current();
 
 	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-	if (tid == TID_ERROR)
+	tid = thread_create (file_name, PRI_DEFAULT, start_process, start);
+	struct child_process *child = malloc(sizeof(struct child_process));
+	if (tid == TID_ERROR){
 		palloc_free_page (fn_copy);
+	printf("Thread creation failed\n");
+		return TID_ERROR;
+	}
+	child->pid = tid;
+	child->exit_status = -1;
+	child->parent = thread_current();
+	
+
+	
+	sema_init(&child->sema, 0);
+	list_push_back(&thread_current()->child, &child->elem);
+	
+	printf("Thread created: %d\n", tid);
 	return tid;
 }
 
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
-{
-	char *file_name = file_name_;
+start_process (void *data)
+{	
+	struct process_start *start = data;
+	char *file_name = start->fn_copy;
+	thread_current()->parent = start->parent_thraed;
 	struct intr_frame if_;
 	bool success;
 
@@ -103,7 +128,26 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-	return -1;
+	struct thread *cur = thread_current ();
+	struct list_elem *e;
+	struct child_process *child = NULL;
+
+	/* Find the child process */
+	for (e = list_begin(&cur->child); e != list_end(&cur->child); e = list_next(e))
+	{
+		child = list_entry(e, struct child_process, elem);
+		if (child->pid == child_tid)
+			break;
+	}
+
+	if (e == list_end(&cur->child))
+		return -1; // Child not found
+
+	/* Wait for the child process to exit */
+	sema_down(&child->sema);
+
+	int exit_status = child->exit_status;
+	return exit_status;
 }
 
 /* Free the current process's resources. */
@@ -111,6 +155,29 @@ void
 process_exit (void)
 {
 	struct thread *cur = thread_current ();
+	struct thread *parent = cur->parent;
+	if (parent != NULL)
+	{
+		printf("%s: exit(%d)\n", cur->name, cur->exit_status);
+		struct list_elem *e;
+		struct child_process *child = NULL;
+
+		/* Find the child process */
+		for (e = list_begin(&parent->child); e != list_end(&parent->child); e = list_next(e))
+		{
+			child = list_entry(e, struct child_process, elem);
+			if (child->pid == cur->tid)
+				break;
+		}
+
+		if (e != list_end(&parent->child))
+		{
+			child->exit_status = cur->exit_status;
+			sema_up(&child->sema);
+		}
+	}
+
+	
 	uint32_t *pd;
 
 	/* Destroy the current process's page directory and switch back

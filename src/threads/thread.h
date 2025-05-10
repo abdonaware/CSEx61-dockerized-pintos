@@ -92,6 +92,8 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
+    struct list child; 
+    struct thread *parent;           /* Pointer to parent thread */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -107,7 +109,14 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
-
+struct child_process
+{
+    tid_t pid;                       /* Process ID */
+    int exit_status;                 /* Exit status of the process */         
+    struct list_elem elem;           /* List element */
+    struct thread *parent;           /* Parent thread */         
+   struct semaphore *sema;           /* Semaphore for synchronization */
+};
 struct file_descriptor {
    int fd;                     /* File descriptor number */
    struct file *file_ptr;      /* Pointer to the file */
