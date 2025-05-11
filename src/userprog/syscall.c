@@ -9,6 +9,7 @@
 #include "userprog/pagedir.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "userprog/process.h"
 
 static void syscall_handler(struct intr_frame *f UNUSED);
 static void get_args(struct intr_frame *f, int *args, int num);
@@ -69,12 +70,12 @@ static void syscall_handler(struct intr_frame *f UNUSED)
 
   case SYS_EXEC:
   {
-    // char *cmdline = (char *)arg[1];
-    // if (!valid(cmdline))
-    //   exit(-1);
+    char *cmdline = (char *)arg[1];
+    if (!valid(cmdline))
+      exit(-1);
 
-    // pid_t pid = exec(cmdline);
-    // f->eax = pid;
+    pid_t pid = exec(cmdline);
+    f->eax = pid;
     break;
   }
 
@@ -183,6 +184,9 @@ static void syscall_handler(struct intr_frame *f UNUSED)
 //     SYS_SEEK,                   /* Change position in a file. */
 //     SYS_TELL,                   /* Report current position in a file. */
 //     SYS_CLOSE,                  /* Close a file. */
+
+
+
 static void get_args(struct intr_frame *f, int *args, int num)
 {
   for (int i = 0; i < num; i++)
@@ -193,6 +197,38 @@ static void get_args(struct intr_frame *f, int *args, int num)
     args[i] = *(int *)ptr;
   }
 }
+
+struct child_process* find_child_process(struct thread *parent, tid_t child_tid) {
+  struct list_elem *e;
+  for (e = list_begin(&parent->child); e != list_end(&parent->child); e = list_next(e)) {
+      struct child_process *child = list_entry(e, struct child_process, elem);
+      if (child->pid == child_tid) {
+          return child;
+      }
+  }
+  return NULL;
+}
+
+
+pid_t exec(const char *cmd_line) {
+
+  tid_t tid = process_execute(cmd_line);
+
+  if (tid == TID_ERROR) {
+      return -1;
+  }
+
+  struct child_process *child = find_child_process(thread_current(), tid);
+  if (child == NULL) {
+      return -1;
+  }
+
+  sema_down(&child->sema);
+
+  return child->exit_status == -1 ? -1 : tid;
+}
+
+
 bool valid(void *vaddr)
 {
   return (vaddr != NULL && is_user_vaddr(vaddr) &&
@@ -367,8 +403,3 @@ void close(int fd)
     }
   }
 }
-
-// pid_t exec(const char *cmd_line)
-// {
-
-// }
