@@ -62,8 +62,7 @@ static void syscall_handler(struct intr_frame *f UNUSED)
   {
     int status = arg[1];
     get_args(f, args, 1);
-    
-    
+     
     // printf("aaaaaaaaaaaaaa %d\n", status);
     exit(status);
     break;
@@ -136,20 +135,13 @@ static void syscall_handler(struct intr_frame *f UNUSED)
       exit(-1);
     if (!valid(buffer + size - 1))
       exit(-1);
-
-    // if (!valid(buffer))
-    //   exit(-1);
-    // if (!valid(buffer + size))
-    //   exit(-1);
-    // if (!valid(buffer + size - 1))
-    //   exit(-1);
     f->eax = read(fd, buffer, size);
     break;
   }
 
   case SYS_WRITE:
   {
-     get_args(f, args, 3);
+    get_args(f, args, 3);
     int fd = arg[1];
     void *buffer = (void *)arg[2];
     unsigned size = arg[3];
@@ -189,26 +181,10 @@ static void syscall_handler(struct intr_frame *f UNUSED)
   default:
   {
     printf("Unknown system call number: %d\n", syscall_number);
-    thread_exit();
+    exit(-1);
   }
   }
 }
-
-// SYS_HALT,                   /* Halt the operating system. */
-//     SYS_EXIT,                   /* Terminate this process. */
-//     SYS_EXEC,                   /* Start another process. */
-//     SYS_WAIT,                   /* Wait for a child process to die. */
-//     SYS_CREATE,                 /* Create a file. */
-//     SYS_REMOVE,                 /* Delete a file. */
-//     SYS_OPEN,                   /* Open a file. */
-//     SYS_FILESIZE,               /* Obtain a file's size. */
-//     SYS_READ,                   /* Read from a file. */
-//     SYS_WRITE,                  /* Write to a file. */
-//     SYS_SEEK,                   /* Change position in a file. */
-//     SYS_TELL,                   /* Report current position in a file. */
-//     SYS_CLOSE,                  /* Close a file. */
-
-
 
 static void get_args(struct intr_frame *f, int *args, int num)
 {
@@ -261,7 +237,7 @@ bool valid(void *vaddr)
 }
 void kill(void)
 {
-  thread_exit();
+  exit(-1);
 }
 
 bool create(const char *file, unsigned initial_size)
