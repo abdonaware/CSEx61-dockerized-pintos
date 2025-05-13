@@ -37,7 +37,7 @@ void syscall_init(void)
 
 static void syscall_handler(struct intr_frame *f UNUSED)
 {
-  printf("Enter system call \n\n\n\n");
+  
   int args[3];
   if (!valid(f->esp))
   {
@@ -47,7 +47,7 @@ static void syscall_handler(struct intr_frame *f UNUSED)
   int syscall_number = *(int *)f->esp;
   int *arg = (int *)f->esp;
 
-  printf("Before switch \n\n\n\n");
+ 
 
   switch (syscall_number)
   {
@@ -61,9 +61,10 @@ static void syscall_handler(struct intr_frame *f UNUSED)
   case SYS_EXIT:
   {
     int status = arg[1];
-    if (!valid((void *)status))
-      kill();
-    printf("%s: exit(%d)\n", thread_current()->name, status);
+    get_args(f, args, 1);
+    
+    
+    // printf("aaaaaaaaaaaaaa %d\n", status);
     exit(status);
     break;
   }
@@ -90,6 +91,10 @@ static void syscall_handler(struct intr_frame *f UNUSED)
     get_args(f, args, 2);
     char *file = (char *)args[0];
     unsigned initial_size = (unsigned)args[1];
+    if (!valid(file))
+      exit(-1);
+    if (!valid(file + initial_size))
+      exit(-1);
     f->eax = create(file, initial_size);
     break;
   }
@@ -106,6 +111,8 @@ static void syscall_handler(struct intr_frame *f UNUSED)
   {
     get_args(f, args, 1);
     char *file = (char *)args[0];
+    if (!valid(file))
+      exit(-1);
     f->eax = open(file);
     break;
   }
@@ -119,9 +126,17 @@ static void syscall_handler(struct intr_frame *f UNUSED)
 
   case SYS_READ:
   {
+    get_args(f, args, 3);
     int fd = arg[1];
     void *buffer = (void *)arg[2];
     unsigned size = arg[3];
+    if (!valid(buffer))
+      exit(-1);
+    if (!valid(buffer + size))
+      exit(-1);
+    if (!valid(buffer + size - 1))
+      exit(-1);
+
     // if (!valid(buffer))
     //   exit(-1);
     // if (!valid(buffer + size))
@@ -134,9 +149,17 @@ static void syscall_handler(struct intr_frame *f UNUSED)
 
   case SYS_WRITE:
   {
+     get_args(f, args, 3);
     int fd = arg[1];
     void *buffer = (void *)arg[2];
     unsigned size = arg[3];
+    if (!valid(buffer))
+      exit(-1);
+    if (!valid(buffer + size))
+      exit(-1);
+    if (!valid(buffer + size - 1))
+      exit(-1);
+
     f->eax = write(fd, buffer, size);
     break;
   }
@@ -193,7 +216,9 @@ static void get_args(struct intr_frame *f, int *args, int num)
   {
     void *ptr = f->esp + 4 + i * 4;
     if (!valid(ptr))
-      kill();
+      {
+      exit(-1);
+    }
     args[i] = *(int *)ptr;
   }
 }
@@ -276,7 +301,7 @@ int open(const char *file)
   }
 
   struct thread *curr_th = thread_current();
-  struct file_descriptor *curr_fd = malloc(sizeof(struct file_descriptor));
+  struct file_descriptor *curr_fd = palloc_get_page(sizeof(struct file_descriptor));
 
   if (curr_fd == NULL)
   {
@@ -295,7 +320,7 @@ void exit(int status)
 {
   struct thread *cur = thread_current();
   cur->exit_status = status; // Save the exit status, so that parent has access to it
-  printf("%s: exit(%d)\n", cur->name, status);
+  // printf("%s: exit(%d)\n", cur->name, status);
   thread_exit(); // Clean up and terminate
 }
 int get_file_size(int fd)
@@ -319,6 +344,12 @@ int read(int fd, void *buffer, unsigned size)
   struct thread *cur = thread_current();
   struct list_elem *e;
   struct file_descriptor *fd_elem;
+  if (fd == 0)
+  {
+    // Read from stdin
+    int read_size = input_getc(buffer, size);
+    return read_size;
+  }
 
   for (e = list_begin(&cur->file_list); e != list_end(&cur->file_list); e = list_next(e))
   {
@@ -339,6 +370,11 @@ int write(int fd, const void *buffer, unsigned size)
   struct thread *cur = thread_current();
   struct list_elem *e;
   struct file_descriptor *fd_elem;
+  if (fd == 1)
+  {
+    putbuf(buffer, size);
+    return size;
+  }
 
   for (e = list_begin(&cur->file_list); e != list_end(&cur->file_list); e = list_next(e))
   {
@@ -398,7 +434,7 @@ void close(int fd)
     {
       file_close(fd_elem->file_ptr);
       list_remove(&fd_elem->elem);
-      free(fd_elem);
+      palloc_free_page(fd_elem);
       return;
     }
   }

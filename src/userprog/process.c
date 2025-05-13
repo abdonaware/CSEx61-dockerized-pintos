@@ -56,10 +56,9 @@ process_execute (const char *file_name)
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, start_process, start);
-	struct child_process *child = malloc(sizeof(struct child_process));
+	struct child_process *child = palloc_get_page(sizeof(struct child_process));
 	if (tid == TID_ERROR){
 		palloc_free_page (fn_copy);
-	printf("Thread creation failed\n");
 		return TID_ERROR;
 	}
 	child->pid = tid;
@@ -71,7 +70,6 @@ process_execute (const char *file_name)
 	sema_init(&child->sema, 0);
 	list_push_back(&thread_current()->child, &child->elem);
 	
-	printf("Thread created: %d\n", tid);
 	return tid;
 }
 
@@ -103,8 +101,8 @@ start_process (void *data)
 		thread_exit ();
 
 	struct thread *t = thread_current();
-	// list_init(&t->file_list);
-    // t->next_fd = 2;
+	list_init(&t->file_list);
+    t->next_fd = 2;
 
 	/* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -126,7 +124,7 @@ start_process (void *data)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid ) 
 {
 	struct thread *cur = thread_current ();
 	struct list_elem *e;
@@ -175,6 +173,8 @@ process_exit (void)
 			child->exit_status = cur->exit_status;
 			sema_up(&child->sema);
 		}
+	}else{
+		printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 	}
 
 	
