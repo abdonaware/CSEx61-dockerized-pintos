@@ -50,7 +50,7 @@ process_execute (const char *file_name)
 	/* Parsed file name */
 	char *save_ptr;
 	file_name = strtok_r((char *) file_name, " ", &save_ptr);
-	struct process_start *start = malloc(sizeof(struct process_start));
+	struct process_start *start = palloc_get_page(sizeof(struct process_start));
 	start->fn_copy = fn_copy;
 	start->parent_thraed = thread_current();
 
@@ -63,6 +63,7 @@ process_execute (const char *file_name)
 	}
 	child->pid = tid;
 	child->exit_status = -1;
+	child ->thread_name=thread_current()->name;
 	child->parent = thread_current();
 	
 
@@ -137,10 +138,13 @@ process_wait (tid_t child_tid )
 		if (child->pid == child_tid)
 			break;
 	}
+	
 
-	if (e == list_end(&cur->child))
+
+	if (e == list_end(&cur->child)|| child->is_waited)
 		return -1; // Child not found
 
+	child->is_waited = true;
 	/* Wait for the child process to exit */
 	sema_down(&child->sema);
 
@@ -154,27 +158,32 @@ process_exit (void)
 {
 	struct thread *cur = thread_current ();
 	struct thread *parent = cur->parent;
+	printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 	if (parent != NULL)
 	{
-		printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 		struct list_elem *e;
 		struct child_process *child = NULL;
+		bool found = false;
 
 		/* Find the child process */
 		for (e = list_begin(&parent->child); e != list_end(&parent->child); e = list_next(e))
 		{
 			child = list_entry(e, struct child_process, elem);
-			if (child->pid == cur->tid)
+			if (child->pid == cur->tid){
+				found = true;
 				break;
+			}
 		}
-
-		if (e != list_end(&parent->child))
+		
+		struct thread *t = thread_current();
+		
+		if (found)
 		{
 			child->exit_status = cur->exit_status;
 			sema_up(&child->sema);
 		}
-	}else{
-		printf("%s: exit(%d)\n", cur->name, cur->exit_status);
+		
+		
 	}
 
 	

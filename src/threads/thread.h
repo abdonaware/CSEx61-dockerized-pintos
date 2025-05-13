@@ -112,7 +112,9 @@ struct thread
 struct child_process
 {
     tid_t pid;                       /* Process ID */
-    int exit_status;                 /* Exit status of the process */         
+    int exit_status;      
+    bool is_waited;  
+    char *thread_name;         /* Exit status of the process */         
     struct list_elem elem;           /* List element */
     struct thread *parent;           /* Parent thread */         
    struct semaphore *sema;           /* Semaphore for synchronization */

@@ -69,20 +69,35 @@ static void syscall_handler(struct intr_frame *f UNUSED)
     break;
   }
 
-  case SYS_EXEC:
-  {
-    char *cmdline = (char *)arg[1];
-    if (!valid(cmdline))
-      exit(-1);
+ case SYS_EXEC:
+{
+  get_args(f, args, 1);
+  char *cmdline = (char *)args[0];
 
-    pid_t pid = exec(cmdline);
-    f->eax = pid;
-    break;
-  }
+  if (!valid(cmdline))
+    exit(-1);
+
+  // Allocate space in kernel memory and copy
+  char *k_cmdline = palloc_get_page(0);
+  if (k_cmdline == NULL)
+    exit(-1);
+
+  strlcpy(k_cmdline, cmdline, PGSIZE);
+
+  pid_t pid = exec(k_cmdline);  // Now safe
+  f->eax = pid;
+
+  palloc_free_page(k_cmdline);  // Clean up
+
+  break;
+}
+
 
   case SYS_WAIT:
   {
     int pid = arg[1];
+    f->eax = process_wait(pid);
+    // printf("aaaaaaaaaaaaaa %d\n", pid);
     break;
   }
 
@@ -189,7 +204,7 @@ static void syscall_handler(struct intr_frame *f UNUSED)
   default:
   {
     printf("Unknown system call number: %d\n", syscall_number);
-    thread_exit();
+    exit(-1);
   }
   }
 }
@@ -228,6 +243,7 @@ struct child_process* find_child_process(struct thread *parent, tid_t child_tid)
   for (e = list_begin(&parent->child); e != list_end(&parent->child); e = list_next(e)) {
       struct child_process *child = list_entry(e, struct child_process, elem);
       if (child->pid == child_tid) {
+          child->parent = parent; // Set the parent thread
           return child;
       }
   }
@@ -243,14 +259,14 @@ pid_t exec(const char *cmd_line) {
       return -1;
   }
 
-  struct child_process *child = find_child_process(thread_current(), tid);
-  if (child == NULL) {
-      return -1;
-  }
+  // struct child_process *child = find_child_process(thread_current(), tid);
+  // if (child == NULL) {
+  //     return -1;
+  // }
 
-  sema_down(&child->sema);
+  
 
-  return child->exit_status == -1 ? -1 : tid;
+  return tid; ;
 }
 
 
