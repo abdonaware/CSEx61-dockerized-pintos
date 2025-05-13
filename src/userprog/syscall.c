@@ -19,6 +19,7 @@ struct lock file_mutex;
 bool valid(void *vaddr);
 /* Calls exit with -1 status */
 void kill(void);
+pid_t exec(const char *cmd_line);
 bool create(const char *file, unsigned initial_size);
 bool remove(const char *file);
 int open(const char *file);
@@ -94,6 +95,7 @@ static void syscall_handler(struct intr_frame *f UNUSED)
 
   case SYS_WAIT:
   {
+    get_args(f, args, 1);
     int pid = arg[1];
     f->eax = process_wait(pid);
     // printf("aaaaaaaaaaaaaa %d\n", pid);
@@ -133,6 +135,7 @@ static void syscall_handler(struct intr_frame *f UNUSED)
 
   case SYS_FILESIZE:
   {
+    get_args(f, args, 1);
     int fd = arg[1];
     f->eax = get_file_size(fd);
     break;
@@ -173,6 +176,7 @@ static void syscall_handler(struct intr_frame *f UNUSED)
 
   case SYS_SEEK:
   {
+    get_args(f, args, 2);
     int fd = arg[1];
     unsigned position = arg[2];
     seek(fd, position);
@@ -181,6 +185,7 @@ static void syscall_handler(struct intr_frame *f UNUSED)
 
   case SYS_TELL:
   {
+    get_args(f, args, 1);
     int fd = arg[1];
     f->eax = tell(fd);
     break;
@@ -188,6 +193,7 @@ static void syscall_handler(struct intr_frame *f UNUSED)
 
   case SYS_CLOSE:
   {
+    get_args(f, args, 1);
     int fd = arg[1];
     close(fd);
     break;
@@ -374,7 +380,7 @@ int write(int fd, const void *buffer, unsigned size)
     if (fd_elem->fd == fd)
     {
       lock_acquire(&fd_elem->read_write_lock);
-      int write_size = file_read(fd_elem->file_ptr, buffer, size);
+      int write_size = file_write(fd_elem->file_ptr, buffer, size);
       lock_release(&fd_elem->read_write_lock);
       return write_size;
     }

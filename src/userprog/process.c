@@ -65,6 +65,7 @@ process_execute (const char *file_name)
 	child->exit_status = -1;
 	child ->thread_name=thread_current()->name;
 	child->parent = thread_current();
+	child->is_waited = false;
 	
 
 	
