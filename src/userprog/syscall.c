@@ -222,14 +222,14 @@ static void get_args(struct intr_frame *f, int *args, int num)
 }
 
 pid_t exec(const char *cmd_line) {
-
+  
   tid_t tid = process_execute(cmd_line);
 
   if (tid == TID_ERROR) {
       return -1;
   }  
 
-  return tid; ;
+  return tid;
 }
 
 

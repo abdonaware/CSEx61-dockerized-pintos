@@ -50,9 +50,19 @@ process_execute (const char *file_name)
 	/* Parsed file name */
 	char *save_ptr;
 	file_name = strtok_r((char *) file_name, " ", &save_ptr);
+	
+	/* Check if file exists */
+	struct file *file = filesys_open(file_name);
+	if (file == NULL) {
+		palloc_free_page(fn_copy);
+		return TID_ERROR;
+	}
+	file_close(file);
+
 	struct process_start *start = palloc_get_page(sizeof(struct process_start));
 	start->fn_copy = fn_copy;
 	start->parent_thraed = thread_current();
+
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, start_process, start);
