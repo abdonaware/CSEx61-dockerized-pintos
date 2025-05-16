@@ -308,8 +308,9 @@ int open(const char *file)
 
   curr_fd->file_ptr = f;
   curr_fd->fd = curr_th->next_fd;
-  lock_init(&curr_fd->read_write_lock);
+  sema_init(&curr_fd->read_write_sema, 1);
   curr_th->next_fd++;
+  curr_fd->executing = false;
 
   list_push_back(&curr_th->file_list, &curr_fd->elem);
   return curr_fd->fd;
@@ -337,37 +338,42 @@ int get_file_size(int fd)
   }
   return -1; // File descriptor not found
 }
+
 int read(int fd, void *buffer, unsigned size)
 {
   struct thread *cur = thread_current();
   struct list_elem *e;
   struct file_descriptor *fd_elem;
+
   if (fd == 0)
   {
-    // Read from stdin
-    int read_size = input_getc(buffer, size);
-    return read_size;
+    uint8_t *buf = buffer;
+    for (unsigned i = 0; i < size; i++)
+      buf[i] = input_getc();
+    return size;
   }
 
   for (e = list_begin(&cur->file_list); e != list_end(&cur->file_list); e = list_next(e))
   {
     fd_elem = list_entry(e, struct file_descriptor, elem);
-    // Acquire the lock before reading
     if (fd_elem->fd == fd)
     {
-      lock_acquire(&fd_elem->read_write_lock);
+      sema_down(&fd_elem->read_write_sema);
+      fd_elem->executing = true;
       int read_size = file_read(fd_elem->file_ptr, buffer, size);
-      lock_release(&fd_elem->read_write_lock);
+      sema_up(&fd_elem->read_write_sema);
       return read_size;
     }
   }
-  return -1; // File descriptor not found
+  return -1;
 }
+
 int write(int fd, const void *buffer, unsigned size)
 {
   struct thread *cur = thread_current();
   struct list_elem *e;
   struct file_descriptor *fd_elem;
+
   if (fd == 1)
   {
     putbuf(buffer, size);
@@ -379,14 +385,19 @@ int write(int fd, const void *buffer, unsigned size)
     fd_elem = list_entry(e, struct file_descriptor, elem);
     if (fd_elem->fd == fd)
     {
-      lock_acquire(&fd_elem->read_write_lock);
+      if (fd_elem->executing)
+        return 0; // Reject write immediately for executables
+
+      sema_down(&fd_elem->read_write_sema);
       int write_size = file_write(fd_elem->file_ptr, buffer, size);
-      lock_release(&fd_elem->read_write_lock);
+      sema_up(&fd_elem->read_write_sema);
       return write_size;
     }
   }
-  return -1; // File descriptor not found
+  return -1;
 }
+
+
 void seek(int fd, unsigned position)
 {
   struct thread *cur = thread_current();
