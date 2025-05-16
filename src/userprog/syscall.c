@@ -10,6 +10,7 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "userprog/process.h"
+#include "string.h"
 
 static void syscall_handler(struct intr_frame *f UNUSED);
 static void get_args(struct intr_frame *f, int *args, int num);
@@ -69,28 +70,28 @@ static void syscall_handler(struct intr_frame *f UNUSED)
     break;
   }
 
- case SYS_EXEC:
-{
-  get_args(f, args, 1);
-  char *cmdline = (char *)args[0];
-
-  if (!valid(cmdline))
-    exit(-1);
-
-  // Allocate space in kernel memory and copy
-  char *k_cmdline = palloc_get_page(0);
-  if (k_cmdline == NULL)
-    exit(-1);
-
-  strlcpy(k_cmdline, cmdline, PGSIZE);
-
-  pid_t pid = exec(k_cmdline);  // Now safe
-  f->eax = pid;
-
-  palloc_free_page(k_cmdline);  // Clean up
-
-  break;
-}
+  case SYS_EXEC:
+  {
+    get_args(f, args, 1);
+    char *cmdline = (char *)args[0];
+  
+    if (!valid(cmdline))
+      exit(-1);
+    
+    // Exec with full cmdline
+    char *k_cmdline = palloc_get_page(0);
+    if (k_cmdline == NULL)
+      exit(-1);
+    strlcpy(k_cmdline, cmdline, PGSIZE);
+  
+    pid_t pid = exec(k_cmdline);
+    f->eax = pid;
+  
+    palloc_free_page(k_cmdline);
+    break;
+  }
+  
+  
 
 
   case SYS_WAIT:
@@ -220,33 +221,13 @@ static void get_args(struct intr_frame *f, int *args, int num)
   }
 }
 
-struct child_process* find_child_process(struct thread *parent, tid_t child_tid) {
-  struct list_elem *e;
-  for (e = list_begin(&parent->child); e != list_end(&parent->child); e = list_next(e)) {
-      struct child_process *child = list_entry(e, struct child_process, elem);
-      if (child->pid == child_tid) {
-          child->parent = parent; // Set the parent thread
-          return child;
-      }
-  }
-  return NULL;
-}
-
-
 pid_t exec(const char *cmd_line) {
 
   tid_t tid = process_execute(cmd_line);
 
   if (tid == TID_ERROR) {
       return -1;
-  }
-
-  // struct child_process *child = find_child_process(thread_current(), tid);
-  // if (child == NULL) {
-  //     return -1;
-  // }
-
-  
+  }  
 
   return tid; ;
 }
@@ -294,32 +275,37 @@ int open(const char *file)
   lock_release(&file_mutex);
 
   if (f == NULL)
-  {
-    return -1; // file could not be opened
-  }
+    return -1;
 
   struct thread *curr_th = thread_current();
   struct file_descriptor *curr_fd = palloc_get_page(sizeof(struct file_descriptor));
-
   if (curr_fd == NULL)
-  {
-    return -1; // couldn't allocate
-  }
+    return -1;
+
+  strlcpy(curr_fd->filename, file, sizeof(curr_fd->filename));
 
   curr_fd->file_ptr = f;
-  curr_fd->fd = curr_th->next_fd;
-  sema_init(&curr_fd->read_write_sema, 1);
-  curr_th->next_fd++;
+  curr_fd->fd = curr_th->next_fd++;
+  //sema_init(&curr_fd->read_write_sema, 1);
   curr_fd->executing = false;
 
   list_push_back(&curr_th->file_list, &curr_fd->elem);
+
   return curr_fd->fd;
 }
+
+
 void exit(int status)
 {
   struct thread *cur = thread_current();
   cur->exit_status = status; // Save the exit status, so that parent has access to it
+  if (cur->executing_file != NULL) {
+    file_allow_write(cur->executing_file);
+    file_close(cur->executing_file);
+    cur->executing_file = NULL;
+  }
   // printf("%s: exit(%d)\n", cur->name, status);
+
   thread_exit(); // Clean up and terminate
 }
 int get_file_size(int fd)
@@ -339,63 +325,61 @@ int get_file_size(int fd)
   return -1; // File descriptor not found
 }
 
-int read(int fd, void *buffer, unsigned size)
-{
-  struct thread *cur = thread_current();
-  struct list_elem *e;
-  struct file_descriptor *fd_elem;
-
-  if (fd == 0)
+  int read(int fd, void *buffer, unsigned size)
   {
-    uint8_t *buf = buffer;
-    for (unsigned i = 0; i < size; i++)
-      buf[i] = input_getc();
-    return size;
-  }
+    struct thread *cur = thread_current();
+    struct list_elem *e;
+    struct file_descriptor *fd_elem;
 
-  for (e = list_begin(&cur->file_list); e != list_end(&cur->file_list); e = list_next(e))
-  {
-    fd_elem = list_entry(e, struct file_descriptor, elem);
-    if (fd_elem->fd == fd)
+    if (fd == 0)
     {
-      sema_down(&fd_elem->read_write_sema);
-      fd_elem->executing = true;
-      int read_size = file_read(fd_elem->file_ptr, buffer, size);
-      sema_up(&fd_elem->read_write_sema);
-      return read_size;
+      uint8_t *buf = buffer;
+      for (unsigned i = 0; i < size; i++)
+        buf[i] = input_getc();
+      return size;
     }
-  }
-  return -1;
-}
 
-int write(int fd, const void *buffer, unsigned size)
-{
-  struct thread *cur = thread_current();
-  struct list_elem *e;
-  struct file_descriptor *fd_elem;
-
-  if (fd == 1)
-  {
-    putbuf(buffer, size);
-    return size;
-  }
-
-  for (e = list_begin(&cur->file_list); e != list_end(&cur->file_list); e = list_next(e))
-  {
-    fd_elem = list_entry(e, struct file_descriptor, elem);
-    if (fd_elem->fd == fd)
+    for (e = list_begin(&cur->file_list); e != list_end(&cur->file_list); e = list_next(e))
     {
-      if (fd_elem->executing)
-        return 0; // Reject write immediately for executables
+      fd_elem = list_entry(e, struct file_descriptor, elem);
+      if (fd_elem->fd == fd)
+      {
+        lock_acquire(&file_mutex);
+        int read_size = file_read(fd_elem->file_ptr, buffer, size);
+        lock_release(&file_mutex);
 
-      sema_down(&fd_elem->read_write_sema);
-      int write_size = file_write(fd_elem->file_ptr, buffer, size);
-      sema_up(&fd_elem->read_write_sema);
-      return write_size;
+        return read_size;
+      }
     }
+    return -1;
   }
-  return -1;
-}
+
+  int write(int fd, const void *buffer, unsigned size)
+  {
+    struct thread *cur = thread_current();
+    struct list_elem *e;
+    struct file_descriptor *fd_elem;
+
+    if (fd == 1)
+    {
+      putbuf(buffer, size);
+      return size;
+    }
+
+    for (e = list_begin(&cur->file_list); e != list_end(&cur->file_list); e = list_next(e))
+    {
+      fd_elem = list_entry(e, struct file_descriptor, elem);
+      if (fd_elem->fd == fd)
+      {
+        lock_acquire(&file_mutex);
+        int write_size = file_write(fd_elem->file_ptr, buffer, size);
+        lock_release(&file_mutex);
+
+        return write_size;
+      }
+    }
+    return -1;
+  }
 
 
 void seek(int fd, unsigned position)

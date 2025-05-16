@@ -101,6 +101,9 @@ struct thread
     int next_fd;                      /* Next file descriptor to allocate */
 
     uint32_t *pagedir;                  /* Page directory. */
+   
+    struct file *executing_file;
+
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -125,6 +128,7 @@ struct file_descriptor {
    struct list_elem elem;      /* List element */
    struct sema *read_write_sema; /* Semaphore for synchronization between writing and reading  */
    bool executing;
+   char filename[200]; 
  };
 
 /* If false (default), use round-robin scheduler.

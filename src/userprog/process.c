@@ -311,7 +311,7 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 	/* Allocate and activate page directory. */
 	t->pagedir = pagedir_create ();
 	if (t->pagedir == NULL)
-		goto done;
+		file_close (file);
 	process_activate ();
 
 	/* Open executable file. */
@@ -319,9 +319,10 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 	if (file == NULL)
 	{
 		printf ("load: %s: open failed\n", file_name);
-		goto done;
+		file_close (file);
 	}
 	file_deny_write(file);
+	t->executing_file = file;
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -333,7 +334,7 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 			|| ehdr.e_phnum > 1024)
 	{
 		printf ("load: %s: error loading executable\n", file_name);
-		goto done;
+			file_close (file);
 	}
 
 	/* Read program headers. */
@@ -343,11 +344,11 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 		struct Elf32_Phdr phdr;
 
 		if (file_ofs < 0 || file_ofs > file_length (file))
-			goto done;
+			file_close (file);
 		file_seek (file, file_ofs);
 
 		if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
-			goto done;
+			file_close (file);
 		file_ofs += sizeof phdr;
 		switch (phdr.p_type)
 		{
@@ -361,7 +362,7 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 		case PT_DYNAMIC:
 		case PT_INTERP:
 		case PT_SHLIB:
-			goto done;
+			file_close (file);
 		case PT_LOAD:
 			if (validate_segment (&phdr, file))
 			{
@@ -387,26 +388,25 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 				}
 				if (!load_segment (file, file_page, (void *) mem_page,
 						read_bytes, zero_bytes, writable))
-					goto done;
+					file_close (file);
+
 			}
 			else
-				goto done;
+				file_close (file);
 			break;
 		}
 	}
 
 	/* Set up stack. */
 	if (!setup_stack (esp, file_name, save_ptr))
-		goto done;
+		file_close (file);
+
 
 	/* Start address. */
 	*eip = (void (*) (void)) ehdr.e_entry;
 
 	success = true;
-
-	done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
 	return success;
 }
 
