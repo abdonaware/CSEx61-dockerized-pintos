@@ -272,15 +272,19 @@ int open(const char *file)
 
   struct file *f = filesys_open(file);
 
-  lock_release(&file_mutex);
-
-  if (f == NULL)
+  
+  if (f == NULL){
+    lock_release(&file_mutex);
     return -1;
-
+  }
+  
+  
   struct thread *curr_th = thread_current();
   struct file_descriptor *curr_fd = palloc_get_page(sizeof(struct file_descriptor));
-  if (curr_fd == NULL)
+  if (curr_fd == NULL){
+    lock_release(&file_mutex);
     return -1;
+  }
 
   strlcpy(curr_fd->filename, file, sizeof(curr_fd->filename));
 
@@ -288,8 +292,9 @@ int open(const char *file)
   curr_fd->fd = curr_th->next_fd++;
   //sema_init(&curr_fd->read_write_sema, 1);
   curr_fd->executing = false;
-
+  
   list_push_back(&curr_th->file_list, &curr_fd->elem);
+  lock_release(&file_mutex);
 
   return curr_fd->fd;
 }
@@ -299,11 +304,11 @@ void exit(int status)
 {
   struct thread *cur = thread_current();
   cur->exit_status = status; // Save the exit status, so that parent has access to it
-  if (cur->executing_file != NULL) {
-    file_allow_write(cur->executing_file);
-    file_close(cur->executing_file);
-    cur->executing_file = NULL;
-  }
+  // if (cur->executing_file != NULL) {
+  //   file_allow_write(cur->executing_file);
+  //   file_close(cur->executing_file);
+  //   cur->executing_file = NULL;
+  // }
   // printf("%s: exit(%d)\n", cur->name, status);
 
   thread_exit(); // Clean up and terminate

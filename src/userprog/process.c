@@ -164,59 +164,74 @@ process_wait (tid_t child_tid )
 }
 
 /* Free the current process's resources. */
-void
-process_exit (void)
+void process_exit(void)
 {
-	struct thread *cur = thread_current ();
-	struct thread *parent = cur->parent;
-	printf("%s: exit(%d)\n", cur->name, cur->exit_status);
-	if (parent != NULL)
-	{
-		struct list_elem *e;
-		struct child_process *child = NULL;
-		bool found = false;
+    struct thread *cur = thread_current();
+    uint32_t *pd;
 
-		/* Find the child process */
-		for (e = list_begin(&parent->child); e != list_end(&parent->child); e = list_next(e))
+    // Print exit message
+    printf("%s: exit(%d)\n", cur->name, cur->exit_status);
+
+    // --- Close executable file ---
+    if (cur->executing_file != NULL)
+    {
+        file_allow_write(cur->executing_file);
+        file_close(cur->executing_file);
+        cur->executing_file = NULL;
+    }
+
+    // --- Close all open file descriptors ---
+    while (!list_empty(&cur->file_list))
+    {
+        struct list_elem *e = list_front(&cur->file_list);
+		if (e != NULL && e->prev != NULL && e->next != NULL)
 		{
-			child = list_entry(e, struct child_process, elem);
-			if (child->pid == cur->tid){
-				found = true;
-				break;
-			}
+			list_remove (e);
 		}
-		
-		struct thread *t = thread_current();
-		
-		if (found)
-		{
-			child->exit_status = cur->exit_status;
-			sema_up(&child->sema);
-		}
-		
-		
-	}
+        struct file_descriptor *fd = list_entry(e, struct file_descriptor, elem);
 
-	
-	uint32_t *pd;
+        if (fd->file_ptr != NULL)
+        {
+            file_close(fd->file_ptr);
+        }
 
-	/* Destroy the current process's page directory and switch back
-     to the kernel-only page directory. */
-	pd = cur->pagedir;
-	if (pd != NULL)
-	{
-		/* Correct ordering here is crucial.  We must set
-         cur->pagedir to NULL before switching page directories,
-         so that a timer interrupt can't switch back to the
-         process page directory.  We must activate the base page
-         directory before destroying the process's page
-         directory, or our active page directory will be one
-         that's been freed (and cleared). */
-		cur->pagedir = NULL;
-		pagedir_activate (NULL);
-		pagedir_destroy (pd);
-	}
+        palloc_free_page(fd);
+    }
+
+    // --- Notify parent about exit ---
+    if (cur->parent != NULL)
+    {
+        struct list_elem *e;
+        for (e = list_begin(&cur->parent->child); e != list_end(&cur->parent->child); e = list_next(e))
+        {
+            struct child_process *child = list_entry(e, struct child_process, elem);
+            if (child->pid == cur->tid)
+            {
+                child->exit_status = cur->exit_status;
+                sema_up(&child->sema); // Notify parent
+                break;
+            }
+        }
+    }
+
+    // --- Free all children this thread created ---
+    while (!list_empty(&cur->child))
+    {
+        struct list_elem *e = list_pop_front(&cur->child);
+        struct child_process *child = list_entry(e, struct child_process, elem);
+        palloc_free_page(child);
+    }
+
+    // --- Destroy page directory ---
+    pd = cur->pagedir;
+    if (pd != NULL)
+    {
+        cur->pagedir = NULL;
+        pagedir_activate(NULL);
+        pagedir_destroy(pd);
+    }
 }
+
 
 /* Sets up the CPU for running user code in the current
    thread.
@@ -321,7 +336,7 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 	/* Allocate and activate page directory. */
 	t->pagedir = pagedir_create ();
 	if (t->pagedir == NULL)
-		file_close (file);
+		goto done;
 	process_activate ();
 
 	/* Open executable file. */
@@ -329,7 +344,7 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 	if (file == NULL)
 	{
 		printf ("load: %s: open failed\n", file_name);
-		file_close (file);
+		goto done;
 	}
 	file_deny_write(file);
 	t->executing_file = file;
@@ -344,7 +359,7 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 			|| ehdr.e_phnum > 1024)
 	{
 		printf ("load: %s: error loading executable\n", file_name);
-			file_close (file);
+		goto done;
 	}
 
 	/* Read program headers. */
@@ -354,11 +369,11 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 		struct Elf32_Phdr phdr;
 
 		if (file_ofs < 0 || file_ofs > file_length (file))
-			file_close (file);
+			goto done;
 		file_seek (file, file_ofs);
 
 		if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
-			file_close (file);
+			goto done;
 		file_ofs += sizeof phdr;
 		switch (phdr.p_type)
 		{
@@ -372,7 +387,7 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 		case PT_DYNAMIC:
 		case PT_INTERP:
 		case PT_SHLIB:
-			file_close (file);
+			goto done;
 		case PT_LOAD:
 			if (validate_segment (&phdr, file))
 			{
@@ -398,25 +413,26 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 				}
 				if (!load_segment (file, file_page, (void *) mem_page,
 						read_bytes, zero_bytes, writable))
-					file_close (file);
-
+					goto done;
 			}
 			else
-				file_close (file);
+				goto done;
 			break;
 		}
 	}
 
 	/* Set up stack. */
 	if (!setup_stack (esp, file_name, save_ptr))
-		file_close (file);
-
+		goto done;
 
 	/* Start address. */
 	*eip = (void (*) (void)) ehdr.e_entry;
 
 	success = true;
+
+	done:
 	/* We arrive here whether the load is successful or not. */
+	// file_close (file);
 	return success;
 }
 
