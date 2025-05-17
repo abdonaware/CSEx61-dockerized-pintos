@@ -121,6 +121,7 @@ struct child_process
     struct list_elem elem;           /* List element */
     struct thread *parent;           /* Parent thread */         
    struct semaphore *sema;           /* Semaphore for synchronization */
+   
 };
 struct file_descriptor {
    int fd;                     /* File descriptor number */
@@ -128,7 +129,7 @@ struct file_descriptor {
    struct list_elem elem;      /* List element */
    struct sema *read_write_sema; /* Semaphore for synchronization between writing and reading  */
    bool executing;
-   char filename[200]; 
+   char filename[20]; 
  };
 
 /* If false (default), use round-robin scheduler.

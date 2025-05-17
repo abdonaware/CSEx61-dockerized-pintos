@@ -66,7 +66,7 @@ process_execute (const char *file_name)
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, start_process, start);
-	struct child_process *child = palloc_get_page(sizeof(struct child_process));
+	struct child_process *child = palloc_get_page(0);
 	if (tid == TID_ERROR){
 		palloc_free_page (fn_copy);
 		return TID_ERROR;
@@ -160,6 +160,8 @@ process_wait (tid_t child_tid )
 	sema_down(&child->sema);
 
 	int exit_status = child->exit_status;
+	list_remove(&child->elem);
+	// palloc_free_page(child); 
 	return exit_status;
 }
 
@@ -181,13 +183,18 @@ void process_exit(void)
     }
 
     // --- Close all open file descriptors ---
-    while (!list_empty(&cur->file_list))
+   
+
+	// while (!list_empty(&cur->child))
+	// {
+	// 	struct list_elem *e = list_pop_front(&cur->child);
+	// 	struct child_process *child = list_entry(e, struct child_process, elem);
+	// 	if (!child->is_waited)
+	// 		palloc_free_page(child);
+	// }
+	while (!list_empty(&cur->file_list))
     {
-        struct list_elem *e = list_front(&cur->file_list);
-		if (e != NULL && e->prev != NULL && e->next != NULL)
-		{
-			list_remove (e);
-		}
+        struct list_elem *e = list_pop_front(&cur->file_list);
         struct file_descriptor *fd = list_entry(e, struct file_descriptor, elem);
 
         if (fd->file_ptr != NULL)
@@ -197,7 +204,6 @@ void process_exit(void)
 
         palloc_free_page(fd);
     }
-
     // --- Notify parent about exit ---
     if (cur->parent != NULL)
     {
@@ -213,14 +219,8 @@ void process_exit(void)
             }
         }
     }
-
+ 	
     // --- Free all children this thread created ---
-    while (!list_empty(&cur->child))
-    {
-        struct list_elem *e = list_pop_front(&cur->child);
-        struct child_process *child = list_entry(e, struct child_process, elem);
-        palloc_free_page(child);
-    }
 
     // --- Destroy page directory ---
     pd = cur->pagedir;
@@ -431,6 +431,12 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 	success = true;
 
 	done:
+	if (!success && file != NULL)
+	{
+		/* We don't care if file is null here. */
+		// 
+		
+	}
 	/* We arrive here whether the load is successful or not. */
 	// file_close (file);
 	return success;
