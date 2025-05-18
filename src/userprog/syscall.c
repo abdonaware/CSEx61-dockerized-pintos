@@ -293,6 +293,17 @@ int open(const char *file)
 
   return curr_fd->fd;
 }
+struct file *open_with_locks(const char *file)
+{
+  lock_acquire(&file_mutex);
+
+  struct file *f = filesys_open(file);
+
+  lock_release(&file_mutex);
+
+  return f;
+}
+
 
 
 void exit(int status)
