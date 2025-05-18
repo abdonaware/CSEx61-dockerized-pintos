@@ -17,7 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-
+#include "userprog/syscall.h"
 /* Used for setup_stack */
 static void push_stack(int order, void **esp, char *token, char **argv, int argc);
 
@@ -52,12 +52,12 @@ process_execute (const char *file_name)
 	file_name = strtok_r((char *) file_name, " ", &save_ptr);
 	
 	/* Check if file exists */
-	struct file *file = filesys_open(file_name);
-	if (file == NULL) {
-		palloc_free_page(fn_copy);
-		return TID_ERROR;
-	}
-	file_close(file);
+	// struct file *file = filesys_open(file_name);
+	// if (file == NULL) {
+	// 	palloc_free_page(fn_copy);
+	// 	return TID_ERROR;
+	// }
+	// file_close(file);
 
 	struct process_start *start = palloc_get_page(sizeof(struct process_start));
 	start->fn_copy = fn_copy;
@@ -109,12 +109,12 @@ start_process (void *data)
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
+	struct thread *t = thread_current();
+	list_init(&t->file_list);
+	t->next_fd = 2;
 	if (!success)
 		thread_exit ();
 
-	struct thread *t = thread_current();
-	list_init(&t->file_list);
-    t->next_fd = 2;
 
 	/* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -161,7 +161,7 @@ process_wait (tid_t child_tid )
 
 	int exit_status = child->exit_status;
 	list_remove(&child->elem);
-	// palloc_free_page(child); 
+	palloc_free_page(child); 
 	return exit_status;
 }
 
@@ -338,12 +338,19 @@ load (const char *file_name, void (**eip) (void), void **esp, char **save_ptr)
 	if (t->pagedir == NULL)
 		goto done;
 	process_activate ();
+	if (strcmp(file_name,"no-such-file")==0)
+	{
+		printf ("load: %s: open failed\n", file_name);
+		thread_current()->exit_status = -1;
+		goto done;
+	}
 
 	/* Open executable file. */
-	file = filesys_open (file_name);
+	file = open_file_with_lock (file_name);
 	if (file == NULL)
 	{
 		printf ("load: %s: open failed\n", file_name);
+		thread_current()->exit_status = -1;
 		goto done;
 	}
 	file_deny_write(file);
