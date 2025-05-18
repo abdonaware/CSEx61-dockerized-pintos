@@ -275,6 +275,18 @@ thread_current (void)
 
 	return t;
 }
+struct thread* thread_get_by_tid(tid_t tid) {
+	struct list_elem *e;
+	struct thread *ret;
+
+	for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)) {
+		ret = list_entry(e, struct thread, allelem);
+		if (ret->tid == tid)
+			return ret;
+	}
+
+	return NULL;
+}
 
 /* Returns the running thread's tid. */
 tid_t
@@ -469,6 +481,7 @@ init_thread (struct thread *t, const char *name, int priority)
 	t->status = THREAD_BLOCKED;
 	strlcpy (t->name, name, sizeof t->name);
 	t->stack = (uint8_t *) t + PGSIZE;
+	sema_init (&t->wait, 0);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
 

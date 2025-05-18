@@ -94,7 +94,9 @@ struct thread
     struct list_elem elem;              /* List element. */
     struct list file_list;             /* List of open files */
     int next_fd;                      /* Next file descriptor to allocate */
-
+    struct semaphore *wait;
+    struct thread *parent;    
+    int exit_status;               /* Exit status */
     uint32_t *pagedir;                  /* Page directory. */
 
 #ifdef USERPROG
@@ -142,6 +144,7 @@ void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
+struct thread* thread_get_by_tid(tid_t tid) ;
 
 int thread_get_nice (void);
 void thread_set_nice (int);

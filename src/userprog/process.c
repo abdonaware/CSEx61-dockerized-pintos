@@ -47,6 +47,8 @@ process_execute (const char *file_name)
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+
+	// sema_down(&thread_current()->wait);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
@@ -74,8 +76,20 @@ start_process (void *file_name_)
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
-	if (!success)
-		thread_exit ();
+	struct thread* child = thread_current();
+	struct thread* parent = child->parent;		// parent
+
+	/* If load failed, quit. */
+	if (!success) {
+		// parent->child_loaded = false;
+		// sema_up(&parent->wait);
+		thread_exit();
+	} else {
+		// parent->child_loaded = true;
+		// sema_up(&parent->wait);
+		// sema_down(&child->wait);/
+	}
+
 
 	struct thread *t = thread_current();
 	list_init(&t->file_list);
@@ -103,6 +117,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+	
 	return -1;
 }
 
@@ -112,9 +127,11 @@ process_exit (void)
 {
 	struct thread *cur = thread_current ();
 	uint32_t *pd;
-
-	/* Destroy the current process's page directory and switch back
-     to the kernel-only page directory. */
+	if (cur->parent != NULL)
+	{	
+		// sema_up(&cur->parent->wait);
+	}
+	
 	pd = cur->pagedir;
 	if (pd != NULL)
 	{
